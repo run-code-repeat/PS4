@@ -82,33 +82,28 @@ def parameters_to_fine_tune(model: nn.Module, mode: str) -> List:
 
     if mode == 'all':
         ### START CODE HERE ###
-        return list(model.parameters())
+        return model.parameters()
         ### END CODE HERE ###
     elif mode == 'last':
         ### START CODE HERE ###
-        return list(model.transformer.h[-2:].parameters())
+        return list(model.parameters())[-2:]
         ### END CODE HERE ###
     elif mode == 'first':
         ### START CODE HERE ###
-        return list(model.transformer.h[:2:].parameters())
+        return list(model.parameters())[:2]
         ### END CODE HERE ###
     elif mode == 'middle':
         ### START CODE HERE ###
-        middle_layers = len(model.transformer.h) // 2
-        return list(model.transformer.h[middle_layers-1:middle_layers+1].parameters())
+        middle = len(list(model.parameters())) // 2
+        return list(model.parameters())[middle-1:middle+1]
         ### END CODE HERE ###
     elif mode.startswith('lora'):
         ### START CODE HERE ###
         lora_rank = int(mode[4:])
-        lora_parameters = []
         for m in model.transformer.h:
             m.mlp.c_fc = LoRAConv1DWrapper(m.mlp.c_fc, lora_rank)
             m.mlp.c_proj = LoRAConv1DWrapper(m.mlp.c_proj, lora_rank)
-            lora_parameters += list(m.mlp.c_fc.lora_A.parameters())
-            lora_parameters += list(m.mlp.c_fc.lora_B.parameters())
-            lora_parameters += list(m.mlp.c_proj.lora_A.parameters())
-            lora_parameters += list(m.mlp.c_proj.lora_B.parameters())
-        return lora_parameters
+        return [p for p in model.parameters() if p.requires_grad]
         ### END CODE HERE ###
     else:
         raise NotImplementedError()
@@ -141,15 +136,12 @@ def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
     loss = None
     if logits.dim() == 2:
         ### START CODE HERE ###
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(logits, targets)
+        loss_fn = nn.CrossEntropyLoss()
+        loss = loss_fn(logits, targets)
         ### END CODE HERE ###
     elif logits.dim() == 3:
         ### START CODE HERE ###
-        criterion = nn.CrossEntropyLoss(ignore_index=-100)
-        shift_logits = logits[:, :-1, :].contiguous()
-        shift_targets = targets[:, 1:].contiguous()
-        loss = criterion(shift_logits.view(-1, shift_logits.size(-1)), shift_targets.view(-1))
+        pass
         ### END CODE HERE ###
     else:
         raise ValueError(f'Logits should either be 2-dim (for classification) or 3-dim (for generation); got {logits.dim()}')
@@ -182,15 +174,14 @@ def get_acc(logits, targets):
 
     if logits.dim() == 2:
         ### START CODE HERE ###
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(logits, targets)
+        preds = torch.argmax(logits, dim=1)
+        correct = (preds == targets).sum().item()
+        accuracy = correct / targets.size(0)
+        return accuracy
         ### END CODE HERE ###
     elif logits.dim() == 3:
         ### START CODE HERE ###
-        criterion = nn.CrossEntropyLoss(ignore_index=-100)
-        shift_logits = logits[:, :-1, :].contiguous()
-        shift_targets = targets[:, 1:].contiguous()
-        loss = criterion(shift_logits.view(-1, shift_logits.size(-1)), shift_targets.view(-1))
+        pass
         ### END CODE HERE ###
     else:
         raise ValueError(f'Logits should either be 2-dim (for classification) or 3-dim (for generation); got {logits.dim()}')
