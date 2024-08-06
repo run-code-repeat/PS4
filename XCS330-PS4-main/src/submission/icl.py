@@ -58,26 +58,26 @@ def get_icl_prompts(
     prompt = ''
 
     ### START CODE HERE ###
-    indices = np.random.permutation(len(support_inputs))
-    support_inputs = [support_inputs[i] for i in indices]
-    support_labels = [support_labels[i] for i in indices]
-
+    perm = np.random.permutation(len(support_inputs))
+    support_inputs = [support_inputs[i] for i in perm]
+    support_labels = [support_labels[i] for i in perm]
+    
     if prompt_mode == 'qa':
-        for inp, lbl in zip(support_inputs, support_labels):
-            prompt += f"{inp} {lbl}. "
-        prompt += test_input
+        # Example: "Sandra travelled to the kitchen. In the kitchen. John went to the office. In the office. Where is Sandra? In the kitchen."
+        prompt = ' '.join([f"{x} In the {y}." for x, y in zip(support_inputs, support_labels)])
+        prompt += f" {test_input} In the"
     elif prompt_mode == 'none':
-        for inp in support_inputs:
-            prompt += f"{inp} "
-        prompt += test_input
+        # Example: "Sandra travelled to the kitchen. John went to the office. kitchen Sandra went to the office. Daniel went back to the garden."
+        prompt = ' '.join([f"{x} {y}" for x, y in zip(support_inputs, support_labels)])
+        prompt += f" {test_input}"
     elif prompt_mode == 'tldr':
-        for inp, lbl in zip(support_inputs, support_labels):
-            prompt += f"{inp} TL;DR: {lbl}. "
-        prompt += f"{test_input} TL;DR:"
+        # Example: "Sandra travelled to the kitchen. TL;DR: kitchen. John went to the office. TL;DR: office. Where is Sandra? TL;DR:"
+        prompt = ' '.join([f"{x} TL;DR: {y}." for x, y in zip(support_inputs, support_labels)])
+        prompt += f" {test_input} TL;DR:"
     elif prompt_mode == 'custom':
-        for inp, lbl in zip(support_inputs, support_labels):
-            prompt += f"{inp} Summary: {lbl}. "
-        prompt += f"{test_input} Summary:"
+        # Implement your own custom format
+        prompt = ' '.join([f"{x} SUMMARY: {y}." for x, y in zip(support_inputs, support_labels)])
+        prompt += f" {test_input} SUMMARY:"
     else:
         raise ValueError(f"Unknown prompt mode: {prompt_mode}")
     ### END CODE HERE ###

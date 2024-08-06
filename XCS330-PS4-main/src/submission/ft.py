@@ -50,7 +50,13 @@ class LoRAConv1DWrapper(nn.Module):
         self.lora_A, self.lora_B = None, None
         
         ### START CODE HERE ###
-        pass
+        self.base_module.weight.requires_grad = False
+        d1, d2 = self.base_module.weight.shape
+        self.lora_A = nn.Parameter(torch.zeros((d1, lora_rank)))
+        self.lora_B = nn.Parameter(torch.randn((lora_rank, d2)) * 0.01)
+        # Ensure gradients are non-zero
+        nn.init.kaiming_uniform_(self.lora_B, a=np.sqrt(5))
+
         ### END CODE HERE ###
 
 
@@ -62,7 +68,9 @@ class LoRAConv1DWrapper(nn.Module):
         ###
         #############################
         ### START CODE HERE ###
-        pass
+        residual = torch.matmul(x, self.lora_A)
+        residual = torch.matmul(residual, self.lora_B)
+        return self.base_module(x) + residual
         ### END CODE HERE ###
 
 
@@ -86,16 +94,16 @@ def parameters_to_fine_tune(model: nn.Module, mode: str) -> List:
         ### END CODE HERE ###
     elif mode == 'last':
         ### START CODE HERE ###
-        return list(model.parameters())[-2:]
+        return list(model.transformer.h[-2:].parameters())
         ### END CODE HERE ###
     elif mode == 'first':
         ### START CODE HERE ###
-        return list(model.parameters())[:2]
+        return list(model.transformer.h[:2:].parameters())
         ### END CODE HERE ###
     elif mode == 'middle':
         ### START CODE HERE ###
-        middle = len(list(model.parameters())) // 2
-        return list(model.parameters())[middle-1:middle+1]
+        middle_layers = len(model.transformer.h) // 2
+        return list(model.transformer.h[middle_layers-1:middle_layers+1].parameters())
         ### END CODE HERE ###
     elif mode.startswith('lora'):
         ### START CODE HERE ###
@@ -103,6 +111,8 @@ def parameters_to_fine_tune(model: nn.Module, mode: str) -> List:
         for m in model.transformer.h:
             m.mlp.c_fc = LoRAConv1DWrapper(m.mlp.c_fc, lora_rank)
             m.mlp.c_proj = LoRAConv1DWrapper(m.mlp.c_proj, lora_rank)
+            m.attn.c_attn = LoRAConv1DWrapper(m.attn.c_attn, lora_rank)
+        # Return only the LoRA parameters
         return [p for p in model.parameters() if p.requires_grad]
         ### END CODE HERE ###
     else:
@@ -141,7 +151,10 @@ def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
         ### END CODE HERE ###
     elif logits.dim() == 3:
         ### START CODE HERE ###
-        pass
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = targets[:, 1:].contiguous()
+        loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         ### END CODE HERE ###
     else:
         raise ValueError(f'Logits should either be 2-dim (for classification) or 3-dim (for generation); got {logits.dim()}')
@@ -181,7 +194,13 @@ def get_acc(logits, targets):
         ### END CODE HERE ###
     elif logits.dim() == 3:
         ### START CODE HERE ###
-        pass
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = targets[:, 1:].contiguous()
+        preds = torch.argmax(shift_logits, dim=-1)
+        mask = (shift_labels != -100)
+        correct = (preds[mask] == shift_labels[mask]).sum().item()
+        accuracy = correct / mask.sum().item()
+        return accuracy
         ### END CODE HERE ###
     else:
         raise ValueError(f'Logits should either be 2-dim (for classification) or 3-dim (for generation); got {logits.dim()}')
@@ -277,7 +296,11 @@ def tokenize_gpt2_batch(tokenizer, x, y):
     tokenized_sequences = None
 
     ### START CODE HERE ###
-    pass
+    inputs = [x_ + y_ for x_, y_ in zip(x, y)]
+    tokenized_sequences = tokenizer(inputs, return_tensors='pt', padding=True, truncation=True)
+    labels = tokenizer(y, return_tensors='pt', padding=True, truncation=True)['input_ids']
+    labels[labels == tokenizer.pad_token_id] = -100
+    tokenized_sequences['labels'] = labels
     ### END CODE HERE ###
     
     return tokenized_sequences.to(DEVICE)
@@ -335,7 +358,14 @@ def ft_gpt2(model, tok, x, y, mode, dataset, batch_size=8, grad_accum=8):
         # Note: the ** operator will unpack a dictionary into keyword arguments to a function (such as your model)
         #############################
         ### START CODE HERE ###
-        pass
+        batch = {k: v[batch_idxs] for k, v in all_both.items()}
+        outputs = model(**batch, use_cache=False)
+        loss = get_loss(outputs.logits, batch['labels'])
+        (loss / grad_accum).backward()
+
+        if (step + 1) % grad_accum == 0:
+            optimizer.step()
+            optimizer.zero_grad()
         ### END CODE HERE ###
 
         if step % (grad_accum * 5) == 0:
