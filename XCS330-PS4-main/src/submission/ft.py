@@ -55,7 +55,7 @@ class LoRAConv1DWrapper(nn.Module):
         d1, d2 = conv1dmodule.weight.size()
         self.lora_A = nn.Parameter(torch.empty(d1, lora_rank))
         self.lora_B = nn.Parameter(torch.empty(d2, lora_rank))
-        nn.init.kaiming_normal_(self.lora_A)
+        nn.init.kaiming_uniform_(self.lora_A)
         nn.init.zeros_(self.lora_B)
         self.base_module.weight.requires_grad = False
 
@@ -157,14 +157,14 @@ def get_loss(logits: torch.tensor, targets: torch.tensor) -> torch.tensor:
         ### END CODE HERE ###
     elif logits.dim() == 3:
         ### START CODE HERE ###
-        logits = logits[:, :-1, :]
-        targets = targets[:, 1:]
-
-        targets = targets.view(-1, 1)
-        logits = logits.view(-1, logits.shape[-1])
-
-        idx = (targets != -100).nonzero(as_tuple=True)[0]
-        loss = F.cross_entropy(input=logits[idx], target=targets[idx].squeeze())
+        # shift_logits = logits[:, :-1, :].contiguous()
+        # shift_labels = targets[:, 1:].contiguous()
+        # loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        # loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        shift_logits = logits[:, :-1, :].contiguous().transpose(1, 2)
+        shift_labels = targets[:, 1:].contiguous()
+        loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+        loss = loss_fn(shift_logits, shift_labels)
         ### END CODE HERE ###
     else:
         raise ValueError(f'Logits should either be 2-dim (for classification) or 3-dim (for generation); got {logits.dim()}')
@@ -204,16 +204,13 @@ def get_acc(logits, targets):
         ### END CODE HERE ###
     elif logits.dim() == 3:
         ### START CODE HERE ###
-        logits = logits[:, :-1, :]
-        targets = targets[:, 1:]
-
-        targets = targets.view(-1, 1)
-        logits = logits.view(-1, logits.shape[-1])
-
-        idx = (targets != -100).nonzero(as_tuple=True)[0]
-
-        acc = (logits[idx].argmax(dim=1) == targets[idx].squeeze()).type(torch.float).mean()
-        return acc
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = targets[:, 1:].contiguous()
+        preds = torch.argmax(shift_logits, dim=-1)
+        mask = (shift_labels != -100)
+        correct = (preds[mask] == shift_labels[mask]).sum().item()
+        accuracy = correct / mask.sum().item()
+        return accuracy
         ### END CODE HERE ###
     else:
         raise ValueError(f'Logits should either be 2-dim (for classification) or 3-dim (for generation); got {logits.dim()}')
