@@ -306,8 +306,11 @@ def tokenize_gpt2_batch(tokenizer, x, y):
     tokenized_sequences = None
 
     ### START CODE HERE ###
+    y = [label + "." for label in y]
+
+    tokenized_sequences = tokenizer([x_ + " " + y_ for x_, y_ in zip(x, y)], return_tensors='pt', padding=True)
     tokens_y = tokenizer(y, return_tensors='pt', padding=True)
-    tokenized_sequences = tokenizer([x_ + y_ for x_, y_ in zip(x, y)], return_tensors='pt', padding=True)
+
     tokenized_sequences["labels"] = torch.ones_like(tokenized_sequences["attention_mask"]) * -100
 
     len_sequences = tokenized_sequences["attention_mask"].sum(dim=1)
@@ -317,6 +320,7 @@ def tokenize_gpt2_batch(tokenizer, x, y):
         tokenized_sequences["labels"][idx, len_sequences[idx] - len_tokens_y[idx]:len_sequences[idx]] = (
             tokens_y["input_ids"][idx, :len_tokens_y[idx]]
         )
+
 
     ### END CODE HERE ###
     
