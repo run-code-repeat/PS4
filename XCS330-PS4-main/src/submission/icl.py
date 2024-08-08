@@ -65,19 +65,31 @@ def get_icl_prompts(
     if prompt_mode == 'qa':
         # Example: "Sandra travelled to the kitchen. In the kitchen. John went to the office. In the office. Where is Sandra? In the kitchen."
         prompt = ' '.join([f"{x} In the {y}." for x, y in zip(support_inputs, support_labels)])
-        prompt += f" {test_input} In the"
+        if support_inputs:
+            prompt += f" {test_input} In the"
+        else:
+            prompt = f"{test_input} In the"
     elif prompt_mode == 'none':
         # Example: "Sandra travelled to the kitchen. John went to the office. kitchen Sandra went to the office. Daniel went back to the garden."
         prompt = ' '.join([f"{x} {y}" for x, y in zip(support_inputs, support_labels)])
-        prompt += f" {test_input}"
+        if support_inputs:
+            prompt += f" {test_input}"
+        else:
+            prompt = f"{test_input}"
     elif prompt_mode == 'tldr':
         # Example: "Sandra travelled to the kitchen. TL;DR: kitchen. John went to the office. TL;DR: office. Where is Sandra? TL;DR:"
         prompt = ' '.join([f"{x} TL;DR: {y}." for x, y in zip(support_inputs, support_labels)])
-        prompt += f" {test_input} TL;DR:"
+        if support_inputs:
+            prompt += f" {test_input} TL;DR:"
+        else:
+            prompt = f"{test_input} TL;DR:"
     elif prompt_mode == 'custom':
         # Implement your own custom format
         prompt = ' '.join([f"{x} SUMMARY: {y}." for x, y in zip(support_inputs, support_labels)])
-        prompt += f" {test_input} SUMMARY:"
+        if support_inputs:
+            prompt += f" {test_input} SUMMARY:"
+        else:
+            prompt = f"{test_input} SUMMARY:"
     else:
         raise ValueError(f"Unknown prompt mode: {prompt_mode}")
     ### END CODE HERE ###
